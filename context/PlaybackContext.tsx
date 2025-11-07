@@ -109,7 +109,7 @@ export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }
     
     metronomeSources.current.forEach(source => {
         try { source.stop(audioContext.currentTime); } catch (e) { /* ignore */ }
-        // FIX: The disconnect method was called without an argument which can cause a TypeScript error. Metronome sources are connected to metronomeGainNode.current, so we disconnect from that explicitly.
+        // FIX: The disconnect method requires an argument in some environments. Metronome sources are connected to metronomeGainNode.current, so we disconnect from that explicitly.
         source.disconnect(metronomeGainNode.current);
     });
     metronomeSources.current = [];
