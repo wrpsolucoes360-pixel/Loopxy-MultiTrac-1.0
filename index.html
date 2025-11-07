@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Loopxy-MultiTrac</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        theme: {
+          extend: {
+            colors: {
+              'audio-dark': '#1A1D22',
+              'audio-darker': '#121417',
+              'audio-dark-contrast': '#2A2F36',
+              'audio-light': '#D0D3D8',
+              'audio-light-contrast': '#8A919E',
+              'audio-accent': '#30C5FF',
+              'audio-accent-darker': '#1aa4d6',
+              'audio-accent-hot': '#FF4F79',
+              'audio-accent-hot-darker': '#d93a5f',
+              'audio-green': '#22C55E',
+              'track-red': '#EF4444',
+              'track-blue': '#3B82F6',
+              'track-green': '#22C55E',
+              'track-yellow': '#EAB308',
+              'track-purple': '#8B5CF6',
+              'track-cyan': '#06B6D4',
+              'track-orange': '#F97316',
+            },
+          },
+        },
+      };
+    </script>
+  <script type="importmap">
+{
+  "imports": {
+    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
+    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.29.0",
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0"
+  }
+}
+</script>
+</head>
+  <body class="bg-audio-darker">
+    <div id="root"></div>
+    <script src="https://apis.google.com/js/api.js" async defer></script>
+    <script type="module" src="/index.tsx"></script>
+  </body>
+</html>

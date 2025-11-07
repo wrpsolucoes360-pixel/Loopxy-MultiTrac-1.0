@@ -1,0 +1,5 @@
+{
+  "name": "Loopxy-MultiTrac",
+  "description": "A progressive web app (PWA) designed for live music performance. It functions as a multi-track audio player and mixer, allowing musicians to manage backing tracks and mix them in real-time, replacing the need for expensive DAWs on stage.",
+  "requestFramePermissions": []
+}
