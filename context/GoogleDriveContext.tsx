@@ -16,9 +16,9 @@ interface GoogleDriveContextType {
 
 const GoogleDriveContext = createContext<GoogleDriveContextType | undefined>(undefined);
 
-// NOTE: These should be stored securely in environment variables.
-const API_KEY = process.env.GOOGLE_API_KEY || '';
-const CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+// NOTE: These are now checked by the ApiKeyGuard component.
+const API_KEY = process.env.GOOGLE_API_KEY!;
+const CLIENT_ID = process.env.GOOGLE_CLIENT_ID!;
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
 export const GoogleDriveProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
