@@ -1,5 +1,6 @@
 
 
+
 export interface Track {
   id: string;
   name: string;
@@ -22,6 +23,7 @@ export interface Song {
   songColor?: TrackColor;
   tracks: Track[];
   structure?: SongSection[];
+  waveformPoints?: number[];
   updatedAt: number; // For sync conflict resolution
 }
 
@@ -76,4 +78,11 @@ export interface MetronomeSettings {
     continuous: boolean; // Play during the whole song
     countInBars: number; // 0 for no count-in
     volume: number;      // 0 to 1
+}
+
+// Notification Types
+export interface Notification {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info';
 }

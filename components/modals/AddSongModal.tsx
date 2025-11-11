@@ -7,11 +7,13 @@ import { Track, TrackColor, Song } from '../../types';
 import { Spinner } from '../core/Spinner';
 import { Icon } from '../core/Icon';
 import { ICONS } from '../../assets/icons';
+import { useNotification } from '../../context/NotificationContext';
 
 const trackColors = Object.values(TrackColor);
 
 export const AddSongModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     const { addSong, updateSong } = useSong();
+    const { addNotification } = useNotification();
     const [title, setTitle] = useState('');
     const [artist, setArtist] = useState('');
     const [bpm, setBpm] = useState('');
@@ -97,9 +99,11 @@ export const AddSongModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
             setFiles(separatedFiles);
             setUploadMode('manual');
             setSingleFile(null);
+            addNotification('Stems separated successfully!', 'success');
         } catch (err) {
-            console.error(err);
-            setError("Could not separate stems. Please try again.");
+            const errorMessage = err instanceof Error ? err.message : "Could not separate stems. Please try again.";
+            setError(errorMessage);
+            addNotification(errorMessage, 'error');
         } finally {
             setIsSeparating(false);
         }
@@ -173,20 +177,26 @@ export const AddSongModal: React.FC<{ isOpen: boolean; onClose: () => void }> = 
             };
             
             const addedSong = await addSong(newSongData, files);
+            addNotification(`Song "${title}" added successfully!`, 'success');
 
             // Now, fetch structure from Gemini async
-            const structure = await getSongStructureFromGemini(title, artist);
-            if (structure && structure.length > 0) {
-                // The song object in the context state might not have the URL yet,
-                // so we update the raw metadata here.
-                updateSong({ ...addedSong, structure });
+            try {
+                const structure = await getSongStructureFromGemini(title, artist);
+                if (structure && structure.length > 0) {
+                    updateSong({ ...addedSong, structure });
+                    addNotification(`Analyzed song structure for "${title}".`, 'info');
+                }
+            } catch (structureError) {
+                addNotification(`Could not analyze song structure for "${title}".`, 'error');
             }
 
             handleClose();
 
         } catch (err) {
             console.error(err);
-            setError('Failed to add song. Please try again.');
+            const errorMessage = "Failed to add song. Please try again.";
+            setError(errorMessage);
+            addNotification(errorMessage, 'error');
             setIsProcessing(false);
         }
     };

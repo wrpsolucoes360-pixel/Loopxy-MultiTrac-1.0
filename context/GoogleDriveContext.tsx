@@ -2,7 +2,8 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { SyncState, GoogleUser, Song, Setlist } from '../types';
 import * as drive from '../services/googleDriveService';
-import { dbGetSongs, dbGetSetlists, dbAddSong, dbAddSetlist, dbGetAudioBlob, dbPutAudioBlob, dbClear } from '../services/db';
+import { dbGetSongs, dbGetSetlists, dbAddSong, dbAddSetlist, dbGetAudioBlob, dbPutAudioBlob, dbUpdateSong, dbUpdateSetlist } from '../services/db';
+import { useNotification } from './NotificationContext';
 
 interface GoogleDriveContextType {
   syncState: SyncState;
@@ -27,6 +28,7 @@ export const GoogleDriveProvider: React.FC<{ children: ReactNode }> = ({ childre
   const [isApiLoaded, setIsApiLoaded] = useState(false);
   const [needsSync, setNeedsSync] = useState(false);
   const [reloadCallback, setReloadCallback] = useState<(() => void) | null>(null);
+  const { addNotification } = useNotification();
 
 
   const registerReloadCallback = useCallback((callback: () => void) => {
@@ -35,7 +37,9 @@ export const GoogleDriveProvider: React.FC<{ children: ReactNode }> = ({ childre
 
   const handleAuthChange = useCallback((isSignedIn: boolean) => {
     if (isSignedIn) {
-      const profile = drive.getUserProfile();
+      // FIX: 'gapi' is not defined in this scope. It should be accessed from the window object.
+      const gUser = (window as any).gapi.auth2.getAuthInstance().currentUser.get();
+      const profile = gUser.getBasicProfile();
       if (profile) {
         setUser({
             name: profile.getName(),
@@ -76,63 +80,91 @@ export const GoogleDriveProvider: React.FC<{ children: ReactNode }> = ({ childre
   const syncData = useCallback(async () => {
     if (syncState === 'syncing' || syncState === 'unauthenticated' || !isApiLoaded) return;
     
-    console.log('Starting sync...');
+    addNotification('Starting sync with Google Drive...', 'info');
     setSyncState('syncing');
 
     try {
         const appFolderId = await drive.findOrCreateAppFolder();
         const driveFiles = await drive.listFiles(appFolderId);
         
+        // 1. GET REMOTE & LOCAL DATA
         const libraryFile = driveFiles.find(f => f.name === 'library.json');
-        
-        // Fetch local data
-        const localSongs = await dbGetSongs();
-        const localSetlists = await dbGetSetlists();
-
         let remoteLibrary: { songs: Song[], setlists: Setlist[] } = { songs: [], setlists: []};
         if (libraryFile?.id) {
             const content = await drive.getFileContent(libraryFile.id);
-            if (content) {
-                remoteLibrary = JSON.parse(content);
+            if (content) remoteLibrary = JSON.parse(content);
+        }
+        const localSongs = await dbGetSongs();
+        const localSetlists = await dbGetSetlists();
+
+        let hasChanged = false;
+
+        // 2. MERGE METADATA (SONGS & SETLISTS)
+        for (const remoteSong of remoteLibrary.songs) {
+            const localSong = localSongs.find(s => s.id === remoteSong.id);
+            if (!localSong) { // Doesn't exist locally -> download
+                await dbAddSong(remoteSong, []);
+                hasChanged = true;
+            } else if (remoteSong.updatedAt > localSong.updatedAt) { // Remote is newer -> update local
+                await dbUpdateSong(remoteSong);
+                hasChanged = true;
+            }
+        }
+        for (const remoteSetlist of remoteLibrary.setlists) {
+            const localSetlist = localSetlists.find(s => s.id === remoteSetlist.id);
+            if (!localSetlist || remoteSetlist.updatedAt > localSetlist.updatedAt) {
+                 await dbUpdateSetlist(remoteSetlist);
+                 hasChanged = true;
             }
         }
 
-        // Simple sync logic: local is master, push all changes to drive.
-        // A more robust implementation would handle conflicts.
-        console.log('Uploading library.json...');
-        const newLibraryContent = JSON.stringify({ songs: localSongs, setlists: localSetlists }, null, 2);
+        // Get final list of local data after potential remote updates
+        const finalLocalSongs = await dbGetSongs();
+        const finalLocalSetlists = await dbGetSetlists();
+
+        // 3. SYNC AUDIO BLOBS
+        for (const song of finalLocalSongs) {
+            for (const track of song.tracks) {
+                const audioBlob = await dbGetAudioBlob(track.id);
+                const remoteFile = driveFiles.find(f => f.name === `${track.id}.mp3`);
+                if (audioBlob && !remoteFile) { // Exists locally, not remotely -> upload
+                    console.log(`Uploading audio for track ${track.id}...`);
+                    await drive.createFile(appFolderId, `${track.id}.mp3`, audioBlob, 'audio/mpeg');
+                } else if (!audioBlob && remoteFile) { // Exists remotely, not locally -> download
+                    console.log(`Downloading audio for track ${track.id}`);
+                    const blob = await drive.getFileBlob(remoteFile.id!);
+                    if (blob) {
+                        await dbPutAudioBlob(track.id, blob);
+                        hasChanged = true;
+                    }
+                }
+            }
+        }
+
+        // 4. UPLOAD FINAL LIBRARY
+        console.log('Uploading merged library.json...');
+        const newLibraryContent = JSON.stringify({ songs: finalLocalSongs, setlists: finalLocalSetlists }, null, 2);
         if (libraryFile?.id) {
             await drive.updateFile(libraryFile.id, newLibraryContent);
         } else {
             await drive.createFile(appFolderId, 'library.json', newLibraryContent, 'application/json');
         }
 
-        // Sync audio files
-        for (const song of localSongs) {
-            for (const track of song.tracks) {
-                const audioFile = driveFiles.find(f => f.name === `${track.id}.mp3`);
-                if (!audioFile) {
-                    console.log(`Uploading audio for track ${track.id}...`);
-                    const blob = await dbGetAudioBlob(track.id);
-                    if (blob) {
-                        await drive.createFile(appFolderId, `${track.id}.mp3`, blob, 'audio/mpeg');
-                    }
-                }
-            }
+        if (hasChanged && reloadCallback) {
+            addNotification('Local data updated from cloud. Reloading.', 'info');
+            reloadCallback();
         }
 
-        // Here we could implement downloading missing files from drive to local
-        // For now, we assume local-first is the primary goal.
-
-        console.log('Sync complete.');
+        addNotification('Sync with Google Drive complete!', 'success');
         setNeedsSync(false);
         setSyncState('synced');
 
     } catch (error) {
         console.error('Sync failed:', error);
         setSyncState('error');
+        addNotification('Sync failed. Check console for details.', 'error');
     }
-  }, [syncState, isApiLoaded]);
+  }, [syncState, isApiLoaded, addNotification, reloadCallback]);
 
 
   const value = {

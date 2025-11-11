@@ -3,9 +3,11 @@ import { Modal } from '../core/Modal';
 import { useSong } from '../../context/SongContext';
 import { createSetlistFromGemini } from '../../services/geminiService';
 import { Spinner } from '../core/Spinner';
+import { useNotification } from '../../context/NotificationContext';
 
 export const AiSetlistModal: React.FC<{ isOpen: boolean; onClose: () => void }> = ({ isOpen, onClose }) => {
     const { songs, createSetlist } = useSong();
+    const { addNotification } = useNotification();
     const [prompt, setPrompt] = useState('');
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -20,13 +22,16 @@ export const AiSetlistModal: React.FC<{ isOpen: boolean; onClose: () => void }> 
             const { setlistName, songIds } = await createSetlistFromGemini(prompt, songs);
             if (songIds.length > 0) {
                 createSetlist(setlistName, songIds);
+                addNotification(`Created new setlist: "${setlistName}"`, 'success');
                 onClose();
                 setPrompt('');
             } else {
                 setError("AI couldn't create a setlist from your library. Try a different prompt or add more songs.");
             }
         } catch (err) {
-            setError('An error occurred while generating the setlist.');
+            const errorMessage = 'An error occurred while generating the setlist.';
+            setError(errorMessage);
+            addNotification(errorMessage, 'error');
             console.error(err);
         } finally {
             setIsLoading(false);

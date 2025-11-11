@@ -1,5 +1,6 @@
 
 
+
 import React, { useState } from 'react';
 import { Header } from './Header';
 import { LibraryPanel } from './LibraryPanel';
@@ -14,6 +15,7 @@ import { MobileNav } from './MobileNav';
 import { SetlistModal } from '../modals/SetlistModal';
 import { PadPlayerModal } from '../modals/PadPlayerModal';
 import { PadPlayer } from '../mixer/PadPlayer';
+import { NotificationHost } from '../core/NotificationHost';
 
 export const AppLayout: React.FC = () => {
     const { activeSong } = useSong();
@@ -92,6 +94,9 @@ export const AppLayout: React.FC = () => {
                 onAiSetlist={openAiSetlistModal}
             />
             <PadPlayerModal isOpen={isPadModalOpen} onClose={() => setPadModalOpen(false)} />
+
+            {/* Notification Host */}
+            <NotificationHost />
         </div>
     );
 };

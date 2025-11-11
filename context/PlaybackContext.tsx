@@ -1,10 +1,13 @@
 
 
+
 import React, { createContext, useContext, useState, ReactNode, useRef, useEffect, useCallback } from 'react';
 import { useSong } from './SongContext';
 import { useMixer } from './MixerContext';
-import { MetronomeSettings } from '../types';
+import { MetronomeSettings, Song } from '../types';
 import { useSettings } from './SettingsContext';
+import { useNotification } from './NotificationContext';
+import { WAVEFORM_POINTS } from '../constants';
 
 interface PlaybackContextType {
   isPlaying: boolean;
@@ -40,9 +43,10 @@ const PlaybackContext = createContext<PlaybackContextType | undefined>(undefined
 const audioContext = new (window.AudioContext || (window as any).webkitAudioContext)();
 
 export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const { activeSong } = useSong();
+  const { activeSong, updateSong } = useSong();
   const { trackStates } = useMixer();
   const { settings } = useSettings();
+  const { addNotification } = useNotification();
   
   const [isPlaying, setIsPlaying] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
@@ -76,6 +80,27 @@ export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }
   const masterGainNode = useRef<GainNode>(audioContext.createGain());
   const metronomeGainNode = useRef<GainNode>(audioContext.createGain());
   const metronomeSources = useRef<OscillatorNode[]>([]);
+  const waveformWorkerRef = useRef<Worker | null>(null);
+
+  // Initialize waveform worker
+  useEffect(() => {
+    waveformWorkerRef.current = new Worker(new URL('../services/waveform.worker.ts', import.meta.url), { type: 'module' });
+    
+    waveformWorkerRef.current.onmessage = (event: MessageEvent<{ status: string; waveform?: number[]; message?: string }>) => {
+        if (event.data.status === 'success' && event.data.waveform && activeSong) {
+            console.log("Waveform generated successfully.");
+            const songWithWaveform: Song = { ...activeSong, waveformPoints: event.data.waveform };
+            updateSong(songWithWaveform);
+        } else {
+            console.error("Waveform worker error:", event.data.message);
+            addNotification("Could not generate waveform for this song.", 'error');
+        }
+    };
+
+    return () => {
+        waveformWorkerRef.current?.terminate();
+    };
+  }, [activeSong, updateSong, addNotification]);
 
 
   useEffect(() => {
@@ -206,22 +231,28 @@ export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }
                         setLoadingProgress((prev) => ({ ...prev, [track.id]: 100 }));
                         resolve(decodedData.duration);
                     } catch (err) {
+                        const errorMessage = `Could not decode ${track.name}. File may be corrupt.`;
                         console.error(`Error decoding track ${track.name}:`, err);
-                        setError(`Could not decode ${track.name}.`);
+                        setError(errorMessage);
+                        addNotification(errorMessage, 'error');
                         setLoadingProgress((prev) => ({ ...prev, [track.id]: -1 }));
                         resolve(0);
                     }
                 } else {
+                    const errorMessage = `Could not load ${track.name}.`;
                     console.error(`Error loading track ${track.name}: Status ${xhr.status}`);
-                    setError(`Could not load ${track.name}.`);
+                    setError(errorMessage);
+                    addNotification(errorMessage, 'error');
                     setLoadingProgress((prev) => ({ ...prev, [track.id]: -1 }));
                     resolve(0);
                 }
             };
 
             xhr.onerror = () => {
-                console.error(`Network error loading track ${track.name}.`);
-                setError(`Could not load ${track.name}.`);
+                const errorMessage = `Network error loading ${track.name}.`;
+                console.error(errorMessage);
+                setError(errorMessage);
+                addNotification(errorMessage, 'error');
                 setLoadingProgress((prev) => ({ ...prev, [track.id]: -1 }));
                 resolve(0);
             };
@@ -238,8 +269,29 @@ export const PlaybackProvider: React.FC<{ children: ReactNode }> = ({ children }
             setLoopEnd(maxDuration);
         }
         setIsFullyLoaded(true);
+
+        // Generate waveform if it doesn't exist
+        if (activeSong && !activeSong.waveformPoints && waveformWorkerRef.current) {
+            const audioDataForWorker: { [trackId: string]: Float32Array } = {};
+            let canGenerate = true;
+            for (const track of activeSong.tracks) {
+                if (audioBuffers.current[track.id]) {
+                    audioDataForWorker[track.id] = audioBuffers.current[track.id].getChannelData(0);
+                } else {
+                    canGenerate = false;
+                    break;
+                }
+            }
+            if (canGenerate && Object.keys(audioDataForWorker).length > 0) {
+                 console.log("Requesting waveform generation...");
+                 waveformWorkerRef.current.postMessage({
+                    audioData: audioDataForWorker,
+                    points: WAVEFORM_POINTS
+                });
+            }
+        }
     });
-  }, [activeSong, cleanupAudio, settings.defaultMetronomeVolume]);
+  }, [activeSong, cleanupAudio, settings.defaultMetronomeVolume, addNotification]);
 
 
   useEffect(() => {

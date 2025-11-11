@@ -4,6 +4,8 @@ import { Song, Setlist, TrackColor } from './types';
 const placeholderAudio = 'https://s3-us-west-2.amazonaws.com/s.cdpn.io/123941/Yodel_Sound_Effect.mp3';
 const now = Date.now();
 
+export const WAVEFORM_POINTS = 250;
+
 export const INITIAL_SONGS: Song[] = [
   {
     id: 'song-1',

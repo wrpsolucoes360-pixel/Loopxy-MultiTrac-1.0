@@ -80,7 +80,11 @@ export const PadPlayer: React.FC = () => {
         // Stop current oscillator if it exists
         if (oscillatorRef.current) {
             oscillatorRef.current.stop();
-            oscillatorRef.current.disconnect();
+            // FIX: The disconnect method requires an argument in some environments.
+            // The oscillator is connected to the gain node.
+            if (gainNodeRef.current) {
+                oscillatorRef.current.disconnect(gainNodeRef.current);
+            }
             oscillatorRef.current = null;
         }
 
@@ -110,16 +114,25 @@ export const PadPlayer: React.FC = () => {
     useEffect(() => {
         const osc = oscillatorRef.current;
         const gain = gainNodeRef.current;
+        const context = audioContextRef.current;
         return () => {
             if (osc) {
                 try {
                     osc.stop();
-                    osc.disconnect();
+                    // FIX: The disconnect method requires an argument in some environments.
+                    // The oscillator is connected to the gain node.
+                    if (gain) {
+                        osc.disconnect(gain);
+                    }
                 } catch(e) { /* ignore */ }
             }
             if (gain) {
                 try {
-                    gain.disconnect();
+                    // FIX: The disconnect method requires an argument in some environments.
+                    // The gain node is connected to the audio context destination.
+                    if (context) {
+                        gain.disconnect(context.destination);
+                    }
                 } catch(e) { /* ignore */}
             }
         };

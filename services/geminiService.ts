@@ -63,7 +63,8 @@ export const getSongStructureFromGemini = async (title: string, artist: string):
     return [];
   } catch (error) {
     console.error('Error fetching song structure from Gemini:', error);
-    return [];
+    // Re-throw the error so the calling component can handle it (e.g., show a toast)
+    throw new Error('Could not get song structure from AI.');
   }
 };
 
@@ -171,7 +172,6 @@ export const analyzeTrackListFromAudio = async (title: string, artist: string): 
 
     } catch (error) {
         console.error('Error analyzing track list from Gemini:', error);
-        // Return a sensible fallback if the AI fails
-        return ['Drums', 'Bass', 'Guitar', 'Keys', 'Vocals'];
+        throw new Error("Failed to get stem suggestions from AI.");
     }
 };

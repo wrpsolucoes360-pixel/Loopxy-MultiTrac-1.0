@@ -3,24 +3,20 @@ import { usePlayback } from '../../context/PlaybackContext';
 import { useSong } from '../../context/SongContext';
 import { Icon } from './Icon';
 import { ICONS } from '../../assets/icons';
+import { Spinner } from './Spinner';
 
-const WAVEFORM_POINTS = 200;
 const SECTION_COLORS = ['bg-pink-500/50', 'bg-blue-500/50', 'bg-green-500/50', 'bg-yellow-500/50', 'bg-purple-500/50', 'bg-indigo-500/50'];
 
-
-const FakeWaveform: React.FC = React.memo(() => {
-    const [points] = useState(() => Array.from({ length: WAVEFORM_POINTS }, () => Math.random()));
-    
+const RealWaveform: React.FC<{ points: number[] }> = React.memo(({ points }) => {
     return (
         <div className="absolute inset-0 flex items-center justify-between px-1">
             {points.map((p, i) => (
                 <div
                     key={i}
-                    className="bg-gradient-to-b from-audio-accent to-pink-500"
+                    className="bg-gradient-to-b from-audio-accent/80 to-pink-500/80"
                     style={{
-                        width: '0.25%',
-                        height: `${20 + p * 70}%`,
-                        opacity: 0.5 + p * 0.3
+                        width: `${100 / points.length}%`,
+                        height: `${Math.max(2, p * 100)}%`,
                     }}
                 />
             ))}
@@ -31,7 +27,7 @@ const FakeWaveform: React.FC = React.memo(() => {
 
 export const WaveformDisplay: React.FC = () => {
     const { activeSong } = useSong();
-    const { isPlaying, currentTime, duration, seek, isLooping, toggleLoop, loopStart, loopEnd, setLoopPoints } = usePlayback();
+    const { isPlaying, currentTime, duration, seek, isLooping, toggleLoop, loopStart, loopEnd, setLoopPoints, isFullyLoaded } = usePlayback();
     
     const containerRef = useRef<HTMLDivElement>(null);
     const waveformInnerRef = useRef<HTMLDivElement>(null);
@@ -203,6 +199,21 @@ export const WaveformDisplay: React.FC = () => {
         });
     };
 
+    const renderContent = () => {
+        if (activeSong?.waveformPoints) {
+            return <RealWaveform points={activeSong.waveformPoints} />;
+        }
+        if (isFullyLoaded) {
+            return (
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-audio-light-contrast text-xs gap-2">
+                    <Spinner size="w-6 h-6" />
+                    <span>Generating waveform...</span>
+                </div>
+            );
+        }
+        return null;
+    };
+
     return (
         <div 
             className="bg-audio-dark rounded-lg p-2 flex-shrink-0 relative h-24 md:h-32 flex items-center cursor-pointer overflow-x-auto overflow-y-hidden touch-pan-y" 
@@ -215,7 +226,8 @@ export const WaveformDisplay: React.FC = () => {
                 ref={waveformInnerRef}
                 style={{ width: `${zoomLevel * 100}%` }}
             >
-                <FakeWaveform />
+                {renderContent()}
+
                 <div className="absolute inset-0 z-10 pointer-events-none">
                     {showSections && renderSections()}
                 </div>
